@@ -32,10 +32,10 @@ listed keeps its default (see [Configuration](#configuration)). The
 ```yaml
 services:
   tester:
-    image: ghcr.io/robinnaumann/keephuman-middleware-tester:latest
+    image: ghcr.io/robinnaumann/keephuman-tester:latest
     restart: unless-stopped
     environment:
-      TARGET_URL: https://app.example.com   # site behind the KeepHuman gate
+      TARGET_URL: https://app.example.com # site behind the KeepHuman gate
       TARGET_PATHS: /,/dashboard
       WEBSOCKET_PATH: /ws
       CLIENTS: 2
@@ -43,7 +43,7 @@ services:
       DURATION_HOURS: 24
     volumes:
       - tester-data:/data
-    cpus: 2                                 # limit the load of the puzzle solving
+    cpus: 2 # limit the load of the puzzle solving
 
 volumes:
   tester-data:
@@ -108,24 +108,24 @@ TARGET_URL=https://app.example.com CLIENTS=2 node src/main.ts
 
 All settings are environment variables, set in `compose.yaml`:
 
-| variable | default | |
-|---|---|---|
-| `TARGET_URL` | (required) | origin of the site behind the gate |
-| `TARGET_PATHS` | `/` | comma-separated paths, visited in turn |
-| `CLIENTS` | `1` | simulated clients visiting in parallel |
-| `INTERVAL_SECONDS` | `60` | per client, between the starts of two visits |
-| `JITTER` | `0.2` | random variation of the interval (±20 %) |
-| `NEW_SESSION_EVERY` | `0` | a client starts a fresh session (cookies, client id) after this many visits; `0` = never |
-| `SEND_CLIENT_ID` | `true` | send `X-Client-ID: <prefix>-<n>`, so the gate tells the clients apart (otherwise they share one session, as they share one IP) |
-| `CLIENT_ID_PREFIX` | `tester` | |
-| `VISIT_TIMEOUT_SECONDS` | `300` | a visit still on the gate after this long counts as `timeout` |
-| `WEBSOCKET_PATH` | (empty) | after passing, open a WebSocket to this path and count whether it connects |
-| `GATE_PREFIX` | `/_keephuman` | the gate's `PATH_PREFIX` |
-| `DURATION_HOURS` | `0` | stop after this long; `0` = run until stopped |
-| `MAX_VISITS` | `0` | stop after this many visits; `0` = no limit |
-| `EXIT_WHEN_DONE` | `false` | when a limit is reached: `false` idles (so `restart: unless-stopped` doesn't start over), `true` exits |
-| `STATUS_INTERVAL_SECONDS` | `30` | how often `status.txt` is rewritten |
-| `RESUME` | `true` | keep counting from the previous run's totals |
+| variable                  | default       |                                                                                                                                |
+| ------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `TARGET_URL`              | (required)    | origin of the site behind the gate                                                                                             |
+| `TARGET_PATHS`            | `/`           | comma-separated paths, visited in turn                                                                                         |
+| `CLIENTS`                 | `1`           | simulated clients visiting in parallel                                                                                         |
+| `INTERVAL_SECONDS`        | `60`          | per client, between the starts of two visits                                                                                   |
+| `JITTER`                  | `0.2`         | random variation of the interval (±20 %)                                                                                       |
+| `NEW_SESSION_EVERY`       | `0`           | a client starts a fresh session (cookies, client id) after this many visits; `0` = never                                       |
+| `SEND_CLIENT_ID`          | `true`        | send `X-Client-ID: <prefix>-<n>`, so the gate tells the clients apart (otherwise they share one session, as they share one IP) |
+| `CLIENT_ID_PREFIX`        | `tester`      |                                                                                                                                |
+| `VISIT_TIMEOUT_SECONDS`   | `300`         | a visit still on the gate after this long counts as `timeout`                                                                  |
+| `WEBSOCKET_PATH`          | (empty)       | after passing, open a WebSocket to this path and count whether it connects                                                     |
+| `GATE_PREFIX`             | `/_keephuman` | the gate's `PATH_PREFIX`                                                                                                       |
+| `DURATION_HOURS`          | `0`           | stop after this long; `0` = run until stopped                                                                                  |
+| `MAX_VISITS`              | `0`           | stop after this many visits; `0` = no limit                                                                                    |
+| `EXIT_WHEN_DONE`          | `false`       | when a limit is reached: `false` idles (so `restart: unless-stopped` doesn't start over), `true` exits                         |
+| `STATUS_INTERVAL_SECONDS` | `30`          | how often `status.txt` is rewritten                                                                                            |
+| `RESUME`                  | `true`        | keep counting from the previous run's totals                                                                                   |
 
 The load is roughly `CLIENTS × 3600 / INTERVAL_SECONDS` visits per hour; a
 visit that takes longer than the interval delays that client's next one.
@@ -144,14 +144,14 @@ Each client solves its puzzles with all CPU cores the browser sees, so set
 
 Visit outcomes:
 
-| outcome | |
-|---|---|
-| `passed` | reached the application after solving one or more challenges |
-| `passed_directly` | reached the application without a challenge (the session was still trusted) |
-| `rejected` | the gate rejected a submission |
-| `timeout` | still on the gate after `VISIT_TIMEOUT_SECONDS` (e.g. the gate had no challenge to give) |
-| `app_error` | the application answered with HTTP 4xx/5xx |
-| `error` | the page couldn't be loaded at all (connection refused, DNS, browser crash) |
+| outcome           |                                                                                          |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| `passed`          | reached the application after solving one or more challenges                             |
+| `passed_directly` | reached the application without a challenge (the session was still trusted)              |
+| `rejected`        | the gate rejected a submission                                                           |
+| `timeout`         | still on the gate after `VISIT_TIMEOUT_SECONDS` (e.g. the gate had no challenge to give) |
+| `app_error`       | the application answered with HTTP 4xx/5xx                                               |
+| `error`           | the page couldn't be loaded at all (connection refused, DNS, browser crash)              |
 
 To copy the files out of the volume:
 
