@@ -1,0 +1,37 @@
+# KeepHuman tester. Works with `docker compose` and `podman compose`.
+#   docker compose up -d
+#   docker compose exec tester cat /data/status.txt
+services:
+  tester:
+    # prebuilt image from GitHub Actions (amd64 and arm64). To build from
+    # this directory instead, replace the line with `build: .`
+    image: ghcr.io/robinnaumann/keephuman-middleware-tester:latest
+    restart: unless-stopped
+    environment:
+      # ---- target
+      TARGET_URL: https://app.example.com    # site behind the KeepHuman gate (required)
+      TARGET_PATHS: /                         # comma separated, visited in turn
+      GATE_PREFIX: /_keephuman
+      WEBSOCKET_PATH: ""                      # e.g. /ws: check a WebSocket after passing
+      # ---- load
+      CLIENTS: 2                              # simulated clients, visiting in parallel
+      INTERVAL_SECONDS: 60                    # per client, between visit starts
+      JITTER: 0.2                             # ±20% random variation of the interval
+      NEW_SESSION_EVERY: 0                    # new session (cookies, client id) after n visits; 0 = never
+      SEND_CLIENT_ID: "true"                  # X-Client-ID header, so the gate tells clients apart
+      CLIENT_ID_PREFIX: tester
+      VISIT_TIMEOUT_SECONDS: 300
+      # ---- duration (0 = unlimited)
+      DURATION_HOURS: 0
+      MAX_VISITS: 0
+      EXIT_WHEN_DONE: "false"                 # false: idle when finished, so the restart policy doesn't rerun
+      # ---- output
+      STATUS_INTERVAL_SECONDS: 30
+      RESUME: "true"                          # keep counting across restarts
+    volumes:
+      - tester-data:/data
+    # puzzles are solved with all cores the browser sees; limit if needed
+    # cpus: 2
+
+volumes:
+  tester-data:
