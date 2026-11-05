@@ -1,5 +1,6 @@
 # KeepHuman tester: drives a bundled headless Chromium against a site behind
-# the KeepHuman gate and writes status.txt / visits.csv to /data.
+# the KeepHuman gate and writes status.html / visits.csv to /data,
+# served on port 8080.
 # Works with docker and podman; configure it via environment variables.
 
 FROM node:24-bookworm-slim
@@ -21,8 +22,10 @@ RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME ["/data"]
 
-# healthy while status.txt keeps being rewritten
+EXPOSE 8080
+
+# healthy while status.html keeps being rewritten
 HEALTHCHECK --interval=60s --timeout=5s --start-period=60s \
-  CMD node -e "const s=require('fs').statSync('/data/status.txt');process.exit(Date.now()-s.mtimeMs<300000?0:1)"
+  CMD node -e "const s=require('fs').statSync('/data/status.html');process.exit(Date.now()-s.mtimeMs<300000?0:1)"
 
 CMD ["node", "src/main.ts"]

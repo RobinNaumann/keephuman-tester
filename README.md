@@ -5,7 +5,7 @@ clients visit the site with a bundled headless Chromium on a schedule. Each
 visit goes through the gate as a real visitor would: the challenge page
 solves its puzzles in the browser, submits them and reloads into the
 application. The tester records what happened and keeps an overview in
-`status.txt`.
+`status.html`, a page that refreshes itself, served on port 8080.
 
 ## Run it
 
@@ -14,9 +14,12 @@ With docker or podman, from this directory:
 ```bash
 # edit compose.yaml (at least TARGET_URL), then
 docker compose up -d          # or: podman compose up -d
-docker compose exec tester cat /data/status.txt
 docker compose logs -f tester # one line per visit
 ```
+
+Then open <http://localhost:8080/> (or the test machine's address) for the
+status page. It reloads every `STATUS_INTERVAL_SECONDS` and shows how old
+its data is, turning red when the tester has stopped updating it.
 
 The image is built for `linux/amd64` and `linux/arm64` by the repository's
 GitHub workflow (`ghcr.io/robinnaumann/keephuman-middleware-tester`). To
@@ -41,6 +44,8 @@ services:
       CLIENTS: 2
       INTERVAL_SECONDS: 60
       DURATION_HOURS: 24
+    ports:
+      - "8080:8080" # status page
     volumes:
       - tester-data:/data
     cpus: 2 # limit the load of the puzzle solving
@@ -63,8 +68,7 @@ once, then `podman machine start`).
 package) or `docker-compose`:
 
 ```bash
-podman compose up -d
-podman compose exec tester cat /data/status.txt
+podman compose up -d             # status page on http://localhost:8080/
 podman compose logs -f tester
 podman compose down            # stop; the tester-data volume is kept
 ```
@@ -77,11 +81,11 @@ podman run -d --name keephuman-tester --restart always \
   -e TARGET_URL=https://app.example.com \
   -e CLIENTS=2 \
   --cpus 2 \
+  -p 8080:8080 \
   -v tester-data:/data \
   ghcr.io/robinnaumann/keephuman-middleware-tester:latest
 
-podman exec keephuman-tester cat /data/status.txt
-podman logs -f keephuman-tester
+podman logs -f keephuman-tester  # status page on http://localhost:8080/
 ```
 
 Podman has no daemon, so the restart policy only covers crashes of the
@@ -124,7 +128,8 @@ All settings are environment variables, set in `compose.yaml`:
 | `DURATION_HOURS`          | `0`           | stop after this long; `0` = run until stopped                                                                                  |
 | `MAX_VISITS`              | `0`           | stop after this many visits; `0` = no limit                                                                                    |
 | `EXIT_WHEN_DONE`          | `false`       | when a limit is reached: `false` idles (so `restart: unless-stopped` doesn't start over), `true` exits                         |
-| `STATUS_INTERVAL_SECONDS` | `30`          | how often `status.txt` is rewritten                                                                                            |
+| `STATUS_INTERVAL_SECONDS` | `30`          | how often `status.html` is rewritten and the page reloads                                                                      |
+| `STATUS_PORT`             | `8080`        | port of the status page server; `0` = off                                                                                      |
 | `RESUME`                  | `true`        | keep counting from the previous run's totals                                                                                   |
 
 The load is roughly `CLIENTS × 3600 / INTERVAL_SECONDS` visits per hour; a
@@ -134,11 +139,13 @@ Each client solves its puzzles with all CPU cores the browser sees, so set
 
 ## Output (in the `/data` volume)
 
-- `status.txt`: overview, rewritten every `STATUS_INTERVAL_SECONDS`:
+- `status.html`: overview, rewritten every `STATUS_INTERVAL_SECONDS`:
   visits by outcome, challenges received, submissions accepted and rejected,
   times the gate had no challenge, tasks by provider, solve and visit times
   (median, p95, max; overall and last hour), HTTP statuses, WebSocket
-  checks, per-client counts and the latest problems.
+  checks, per-client counts and the latest problems. The tester serves it
+  on `STATUS_PORT` (with `visits.csv` at `/visits.csv`); it also works
+  opened straight from the file.
 - `visits.csv`: one line per visit, for later analysis.
 - `state.json`: totals, so a restart continues counting (`RESUME`).
 

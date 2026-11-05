@@ -28,9 +28,11 @@ export type Config = {
   gatePrefix: string;
   /** after passing, open a WebSocket to this path; empty = no check */
   websocketPath: string;
-  /** where status.txt, visits.csv and state.json are written */
+  /** where status.html, visits.csv and state.json are written */
   dataDir: string;
   statusIntervalSeconds: number;
+  /** port of the status page server; 0 = off */
+  statusPort: number;
   /** keep counting from the previous run's state.json */
   resume: boolean;
 };
@@ -73,6 +75,7 @@ export function loadConfig(env = process.env): Config {
     websocketPath: str("WEBSOCKET_PATH", ""),
     dataDir: str("DATA_DIR", "./data"),
     statusIntervalSeconds: Math.max(1, num("STATUS_INTERVAL_SECONDS", 30)),
+    statusPort: Math.round(num("STATUS_PORT", 8080)),
     resume: bool("RESUME", true),
   };
   return cfg;

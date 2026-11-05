@@ -1,5 +1,6 @@
 import { chromium, type Browser, type BrowserContext } from "playwright";
 import { loadConfig, type Config } from "./config.ts";
+import { serveStatus } from "./server.ts";
 import { Stats } from "./stats.ts";
 import { visit } from "./visit.ts";
 
@@ -37,8 +38,9 @@ async function main() {
   await stats.init();
   log(
     `testing ${cfg.targetUrl} (${cfg.paths.join(", ")}) with ${cfg.clients} client(s), ` +
-      `one visit every ${cfg.intervalSeconds}s each; status in ${cfg.dataDir}/status.txt`,
+      `one visit every ${cfg.intervalSeconds}s each; status in ${cfg.dataDir}/status.html`,
   );
+  const server = cfg.statusPort ? serveStatus(cfg, log) : null;
 
   const endAt = cfg.durationHours > 0 ? Date.now() + cfg.durationHours * 3600_000 : Infinity;
   let started = 0;
@@ -115,6 +117,8 @@ async function main() {
       process.once("SIGINT", () => resolve());
     });
   }
+  server?.close();
+  server?.closeAllConnections();
 }
 
 /** sleeps, waking up early once `cancel` returns true */

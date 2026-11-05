@@ -1,6 +1,6 @@
 # KeepHuman tester. Works with `docker compose` and `podman compose`.
 #   docker compose up -d
-#   docker compose exec tester cat /data/status.txt
+#   then open http://localhost:8080/ (status page, refreshes itself)
 services:
   tester:
     # prebuilt image from GitHub Actions (amd64 and arm64). To build from
@@ -26,8 +26,11 @@ services:
       MAX_VISITS: 0
       EXIT_WHEN_DONE: "false"                 # false: idle when finished, so the restart policy doesn't rerun
       # ---- output
-      STATUS_INTERVAL_SECONDS: 30
+      STATUS_INTERVAL_SECONDS: 30            # also the page's refresh interval
+      STATUS_PORT: 8080                       # status page server; 0 = off
       RESUME: "true"                          # keep counting across restarts
+    ports:
+      - "8080:8080"                           # "127.0.0.1:8080:8080": only from this machine
     volumes:
       - tester-data:/data
     # puzzles are solved with all cores the browser sees; limit if needed

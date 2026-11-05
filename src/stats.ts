@@ -105,10 +105,10 @@ export class Stats {
     return Object.values(this.state.visits).reduce((a, b) => a + b, 0);
   }
 
-  /** writes status.txt and state.json */
+  /** writes status.html and state.json */
   async write(done = false) {
     await writeAtomic(this.path("state.json"), JSON.stringify(this.state));
-    await writeAtomic(this.path("status.txt"), this.render(done));
+    await writeAtomic(this.path("status.html"), this.render(done));
   }
 
   render(done = false): string {
@@ -121,59 +121,136 @@ export class Stats {
     const elapsedH = (now - s.firstStartedAt) / 3600_000;
     const cfg = this.cfg;
 
-    const lines: string[] = [];
-    const kv = (k: string, v: string | number) => lines.push(`  ${k.padEnd(30)} ${v}`);
-    const head = (t: string) => lines.push("", t, "-".repeat(t.length));
+    const out: string[] = [];
+    const table = (head: string[], rows: (string | number)[][]) =>
+      out.push(
+        "<table>",
+        head.length ? `<tr>${head.map((h) => `<th>${esc(h)}</th>`).join("")}</tr>` : "",
+        ...rows.map((r) => `<tr>${r.map((c, i) => (i || head.length ? `<td>${c}</td>` : `<th>${c}</th>`)).join("")}</tr>`),
+        "</table>",
+      );
+    const section = (t: string) => out.push(`<h2>${esc(t)}</h2>`);
+    const outcome = (o: Outcome) => `<span class="${o}">${o}</span>`;
 
-    lines.push(`KeepHuman tester status - ${iso(now)}${done ? " (finished)" : ""}`);
-    lines.push("=".repeat(lines[0]!.length));
-    kv("target", cfg.targetUrl);
-    kv("paths", cfg.paths.join(", "));
-    kv("clients / interval", `${cfg.clients} clients, a visit every ${cfg.intervalSeconds}s each (±${Math.round(cfg.jitter * 100)}%)`);
-    kv("counting since", `${iso(s.firstStartedAt)} (${dur(now - s.firstStartedAt)}, run ${s.runs})`);
-    kv("this run since", `${iso(this.runStartedAt)} (${dur(now - this.runStartedAt)})`);
-    kv("visits in progress", this.active);
+    table([], [
+      ["target", esc(cfg.targetUrl)],
+      ["paths", esc(cfg.paths.join(", "))],
+      ["clients / interval", `${cfg.clients} clients, a visit every ${cfg.intervalSeconds}s each (±${Math.round(cfg.jitter * 100)}%)`],
+      ["counting since", `${iso(s.firstStartedAt)} (${dur(now - s.firstStartedAt)}, run ${s.runs})`],
+      ["this run since", `${iso(this.runStartedAt)} (${dur(now - this.runStartedAt)})`],
+      ["visits in progress", this.active],
+    ]);
 
-    head("Visits");
-    kv("total", `${total} (${rate(total, elapsedH)}/h overall, ${recent.length} in the last hour)`);
-    kv("reached the application", `${passed} (${pct(passed, total)})`);
-    for (const o of OUTCOMES) kv(`  ${o}`, `${s.visits[o]} (${pct(s.visits[o], total)})`);
-    kv("last hour", OUTCOMES.map((o) => `${o} ${recent.filter((x) => x.outcome === o).length}`).join(", "));
+    section("Visits");
+    table([], [
+      ["total", `${total} (${rate(total, elapsedH)}/h overall, ${recent.length} in the last hour)`],
+      ["reached the application", `${passed} (${pct(passed, total)})`],
+    ]);
+    table(
+      ["outcome", "all", "", "last hour"],
+      OUTCOMES.map((o) => [outcome(o), s.visits[o], pct(s.visits[o], total), recent.filter((x) => x.outcome === o).length]),
+    );
 
-    head("Challenges");
-    kv("received", s.challenges);
-    kv("submissions accepted", `${s.accepted} (${pct(s.accepted, s.accepted + s.rejected)})`);
-    kv("submissions rejected", s.rejected);
-    kv("no challenge available (404)", s.noChallenge);
-    kv("tasks solved, by provider", Object.entries(s.tasks).map(([p, n]) => `${p} ${n}`).join(", ") || "none");
+    section("Challenges");
+    table([], [
+      ["received", s.challenges],
+      ["submissions accepted", `${s.accepted} (${pct(s.accepted, s.accepted + s.rejected)})`],
+      ["submissions rejected", s.rejected],
+      ["no challenge available (404)", s.noChallenge],
+      ["tasks solved, by provider", esc(Object.entries(s.tasks).map(([p, n]) => `${p} ${n}`).join(", ") || "none")],
+    ]);
 
-    head("Timing (all kept samples | last hour)");
+    section("Timing");
     const solveAll = s.samples.flatMap((x) => x.solveMs);
     const solveRecent = recent.flatMap((x) => x.solveMs);
     const visitAll = s.samples.filter((x) => x.outcome === "passed").map((x) => x.totalMs);
     const visitRecent = recent.filter((x) => x.outcome === "passed").map((x) => x.totalMs);
-    kv("challenge solve time", `${summary(solveAll)} | ${summary(solveRecent)}`);
-    kv("visit with challenge", `${summary(visitAll)} | ${summary(visitRecent)}`);
-    kv("visit without challenge", summary(s.samples.filter((x) => x.outcome === "passed_directly").map((x) => x.totalMs)));
+    const directAll = s.samples.filter((x) => x.outcome === "passed_directly").map((x) => x.totalMs);
+    const directRecent = recent.filter((x) => x.outcome === "passed_directly").map((x) => x.totalMs);
+    table(["", "all kept samples", "last hour"], [
+      ["challenge solve time", summary(solveAll), summary(solveRecent)],
+      ["visit with challenge", summary(visitAll), summary(visitRecent)],
+      ["visit without challenge", summary(directAll), summary(directRecent)],
+    ]);
 
-    head("Responses");
-    kv("final page HTTP status", Object.entries(s.statuses).map(([k, n]) => `${k}: ${n}`).join(", ") || "none");
+    section("Responses");
+    const responses: (string | number)[][] = [
+      ["final page HTTP status", Object.entries(s.statuses).map(([k, n]) => `${k}: ${n}`).join(", ") || "none"],
+    ];
     if (cfg.websocketPath)
-      kv(`WebSocket ${cfg.websocketPath}`, `${s.websocket.ok} ok, ${s.websocket.failed} failed (${pct(s.websocket.ok, s.websocket.ok + s.websocket.failed)} ok)`);
+      responses.push([
+        `WebSocket ${esc(cfg.websocketPath)}`,
+        `${s.websocket.ok} ok, ${s.websocket.failed} failed (${pct(s.websocket.ok, s.websocket.ok + s.websocket.failed)} ok)`,
+      ]);
+    table([], responses);
 
-    head("Clients (this run)");
-    for (const [id, c] of [...this.clients].sort())
-      kv(id, `${c.visits} visits, last ${c.last} at ${iso(c.lastAt)}`);
-    if (!this.clients.size) lines.push("  none yet");
+    section("Clients (this run)");
+    if (this.clients.size)
+      table(
+        ["client", "visits", "last outcome", "at"],
+        [...this.clients].sort().map(([id, c]) => [esc(id), c.visits, outcome(c.last), iso(c.lastAt)]),
+      );
+    else out.push("<p>none yet</p>");
 
-    head(`Recent problems (last ${MAX_ERRORS})`);
-    for (const e of [...s.errors].reverse()) lines.push(`  ${iso(e.t)}  ${e.client}  ${e.message}`);
-    if (!s.errors.length) lines.push("  none");
+    section(`Recent problems (last ${MAX_ERRORS})`);
+    if (s.errors.length)
+      table(["time", "client", "problem"], [...s.errors].reverse().map((e) => [iso(e.t), esc(e.client), esc(e.message)]));
+    else out.push("<p>none</p>");
 
-    lines.push("", "Per-visit details: visits.csv in the same directory.", "");
-    return lines.join("\n");
+    out.push(`<p>Per-visit details: <a href="visits.csv">visits.csv</a> in the same directory.</p>`);
+
+    const title = `KeepHuman tester${done ? " (finished)" : ""}`;
+    // reload with the status file; the age warns when the tester stopped writing it
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+${done ? "" : `<meta http-equiv="refresh" content="${cfg.statusIntervalSeconds}">`}
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<style>${STYLE}</style>
+</head>
+<body>
+<h1>${esc(title)}</h1>
+<p id="updated" data-t="${now}" data-interval="${cfg.statusIntervalSeconds}" data-done="${done}">updated ${iso(now)}</p>
+${out.join("\n")}
+<script>${SCRIPT}</script>
+</body>
+</html>
+`;
   }
 }
+
+const STYLE = `
+:root { color-scheme: light dark; --muted: #888; --line: #8884; --good: #1a7f37; --bad: #cf222e; --warn: #9a6700; }
+@media (prefers-color-scheme: dark) { :root { --good: #3fb950; --bad: #f85149; --warn: #d29922; } }
+body { font: 14px/1.5 system-ui, sans-serif; max-width: 60rem; margin: 2rem auto; padding: 0 1rem; }
+h1 { font-size: 1.4rem; margin-bottom: 0; }
+h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+#updated { color: var(--muted); margin-top: .2rem; }
+#updated.stale { color: var(--bad); font-weight: 600; }
+table { border-collapse: collapse; margin: .5rem 0; }
+th, td { text-align: left; padding: .2rem 1.5rem .2rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; }
+td { font-variant-numeric: tabular-nums; }
+.passed, .passed_directly { color: var(--good); }
+.rejected, .error, .app_error { color: var(--bad); }
+.timeout { color: var(--warn); }
+`;
+
+const SCRIPT = `
+const el = document.getElementById("updated");
+const t = Number(el.dataset.t), interval = Number(el.dataset.interval), done = el.dataset.done === "true";
+const tick = () => {
+  const age = Math.round((Date.now() - t) / 1000);
+  const stale = !done && age > 3 * interval + 10;
+  el.textContent = "updated " + new Date(t).toISOString().replace(/\\.\\d+Z$/, "Z") + " (" + age + "s ago)" +
+    (done ? ", finished" : stale ? ", not updated for a while: is the tester still running?" : "");
+  el.classList.toggle("stale", stale);
+};
+tick();
+setInterval(tick, 1000);
+`;
 
 const CSV_HEADER =
   "started_at,client,path,outcome,total_ms,http_status,challenges,solve_ms,accepted,rejected,no_challenge,tasks,websocket,error\n";
@@ -210,6 +287,8 @@ async function writeAtomic(path: string, data: string) {
   await rename(`${path}.tmp`, path);
 }
 
+const esc = (s: string) =>
+  s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const iso = (t: number) => new Date(t).toISOString().replace(/\.\d+Z$/, "Z");
 const pct = (a: number, b: number) => (b > 0 ? `${((100 * a) / b).toFixed(1)}%` : "n/a");
 const rate = (n: number, h: number) => (h > 0 ? (n / h).toFixed(1) : "n/a");
